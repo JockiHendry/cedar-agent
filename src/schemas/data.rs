@@ -1,11 +1,12 @@
 use std::error::Error;
 
 use cedar_policy_core::entities::{
-    EntitiesError, EntityJSON, EntityJsonParser, NoEntitiesSchema, TCComputation,
+    EntityJson, EntityJsonParser, NoEntitiesSchema, TCComputation,
 };
 use cedar_policy_core::extensions::Extensions;
 use cedar_policy_core::{ast, entities};
 use cedar_policy::Schema;
+use cedar_policy_core::entities::err::EntitiesError;
 use log::debug;
 use rocket::serde::json::serde_json::{from_str, json, to_string};
 use rocket::serde::json::Value;
@@ -21,7 +22,7 @@ pub struct Entity(Value);
 
 impl From<ast::Entity> for Entity {
     fn from(value: ast::Entity) -> Self {
-        let entity_json = EntityJSON::from_entity(&value).unwrap();
+        let entity_json = EntityJson::from_entity(&value).unwrap();
         let json_string = to_string(&entity_json).unwrap();
         Self(from_str(&json_string).unwrap())
     }

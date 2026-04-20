@@ -6,7 +6,6 @@ use rocket_okapi::openapi;
 use crate::authn::ApiKey;
 use crate::errors::response::AgentError;
 use cedar_policy::Schema as CedarSchema;
-use log::error;
 use crate::schemas::schema::Schema as InternalSchema;
 use crate::services::{schema::SchemaStore, policies::PolicyStore, data::DataStore};
 

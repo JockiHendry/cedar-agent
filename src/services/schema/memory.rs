@@ -13,9 +13,18 @@ pub struct Schema(CedarSchema, InternalSchema);
 
 impl Schema {
     fn empty() -> Self {
+        let cedar_schema = CedarSchema::from_json_str(r#"
+        {
+          "": {
+            "entityTypes": {},
+            "actions": {},
+            "commonTypes": {}
+          }
+        }
+        "#).unwrap();
         Self {
-            0: CedarSchema::from_str("{}").unwrap(),
-            1: InternalSchema::empty()
+            0: cedar_schema,
+            1: InternalSchema::empty(),
         }
     }
 

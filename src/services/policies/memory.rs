@@ -123,7 +123,7 @@ impl PolicyStore for MemoryPolicyStore {
         let mut lock = self.write().await;
         let stored_policy = lock.0.get(&policy.id);
         match stored_policy {
-            Some(_) => Err(PolicySetError::AlreadyDefined.into()),
+            Some(_) => Err(PolicyStoreError::PolicyAlreadyExists(policy.id.clone()).into()),
             None => {
                 let policy: cedar_policy::Policy = match policy.try_into() {
                     Ok(p) => p,
@@ -151,7 +151,7 @@ impl PolicyStore for MemoryPolicyStore {
         let mut new_policies: HashMap<String, cedar_policy::Policy> = HashMap::new();
         for policy in policies {
             match new_policies.get(&policy.id) {
-                Some(_) => return Err(PolicySetError::AlreadyDefined.into()),
+                Some(_) => return Err(PolicyStoreError::PolicyAlreadyExists(policy.id.clone()).into()),
                 None => {
                     let policy: cedar_policy::Policy = match policy.borrow().try_into() {
                         Ok(p) => p,

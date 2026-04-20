@@ -3,11 +3,9 @@ use std::error::Error;
 use std::str::FromStr;
 
 
-use cedar_policy::{Context, EntityUid, EvaluationError, Request, Response, Entities};
+use cedar_policy::{Context, EntityUid, EvaluationError, Request, Response, Entities, AuthorizationError, ParseErrors};
 use cedar_policy_core::authorizer::Decision;
-use cedar_policy_core::parser::err::ParseErrors;
-use cedar_policy_core::entities::EntitiesError;
-
+use cedar_policy_core::entities::err::EntitiesError;
 use rocket::serde::json::serde_json;
 use rocket_okapi::okapi::schemars;
 use rocket_okapi::okapi::schemars::JsonSchema;
@@ -61,7 +59,7 @@ impl AuthorizationRequest {
         let patched_entities = match self.additional_entities {
             None => request_entities,
             Some(ents) => {
-                match Entities::from_entities(request_entities.iter().chain(ents.iter()).cloned()) {
+                match Entities::from_entities(request_entities.iter().chain(ents.iter()).cloned(), None) {
                     Ok(entities) => entities,
                     Err(err) => return Err(err)
                 }
@@ -107,43 +105,28 @@ impl TryInto<AuthorizationRequest> for AuthorizationCall {
     type Error = Box<dyn Error>;
 
     fn try_into(self) -> Result<AuthorizationRequest, Self::Error> {
-        let principal = match string_to_euid(self.principal) {
-            Ok(p) => p,
-            Err(e) => return Err(e.into()),
-        };
-        let action = match string_to_euid(self.action) {
-            Ok(a) => a,
-            Err(e) => return Err(e.into()),
-        };
-        let resource = match string_to_euid(self.resource) {
-            Ok(r) => r,
-            Err(e) => return Err(e.into()),
-        };
-        let entities = match self.entities {
-            Some(et) => match Entities::from_json_value(et, None) {
-                Ok(et) => {
-                    Some(et)
-                },
-                Err(e) => return Err(e.into()),
-            },
-            None => None,
-        };
-        let additional_entities = match self.additional_entities {
-            Some(et) => match Entities::from_json_value(et, None) {
-                Ok(et) => Some(et),
-                Err(e) => return Err(e.into()),
-            },
-            None => None,
-        };
+        let principal = string_to_euid(self.principal)?;
+        let action = string_to_euid(self.action)?;
+        let resource = string_to_euid(self.resource)?;
+        let entities = self.entities
+            .map(|et| Entities::from_json_value(et, None))
+            .transpose()?;
+        let additional_entities = self.additional_entities
+            .map(|et| Entities::from_json_value(et, None))
+            .transpose()?;
         let context = match self.context {
-            Some(c) => match Context::from_json_value(c, None) {
-                Ok(c) => c,
-                Err(e) => return Err(e.into()),
-            },
+            Some(c) => Context::from_json_value(c, None)?,
             None => Context::empty(),
         };
+        let request = Request::new(
+            principal.ok_or("missing principal")?,
+            action.ok_or("missing action")?,
+            resource.ok_or("missing resource")?,
+            context,
+            None
+        )?;
         Ok(AuthorizationRequest::new(
-            Request::new(principal, action, resource, context),
+            request,
             entities,
             additional_entities,
         ))
@@ -188,7 +171,7 @@ impl Into<Response> for AuthorizationAnswer {
                     .iter()
                     .map(|r| cedar_policy::PolicyId::from_str(r).unwrap()),
             ),
-            self.diagnostics.errors,
+            Vec::new(),
         )
     }
 }
@@ -202,9 +185,7 @@ impl From<Response> for AuthorizationAnswer {
             },
             diagnostics: DiagnosticsRef {
                 reason: HashSet::from_iter(value.diagnostics().reason().map(|r| r.to_string())),
-                errors: HashSet::from_iter(value.diagnostics().errors().map(|e| match e {
-                    EvaluationError::StringMessage(e) => e,
-                })),
+                errors: value.diagnostics().errors().map(|e| e.to_string()).collect(),
             },
         }
     }
